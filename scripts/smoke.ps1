@@ -15,16 +15,33 @@ if ($LASTEXITCODE -ne 0 -or $version -notmatch 'ncspot') { throw 'The optional c
 Add-Type -AssemblyName System.IO.Compression
 $zip = [IO.Compression.ZipFile]::OpenRead($archive)
 try {
-    foreach ($name in 'LARPlayer/LARPlayer.exe','LARPlayer/src/deck.hpp','LARPlayer/engine/LICENSE-ncspot.txt','LARPlayer/LICENSE') {
+    $expected = @(
+        'LARPlayer/LARPlayer.exe','LARPlayer/LICENSE','LARPlayer/README.md','LARPlayer/deck-preview.svg',
+        'LARPlayer/engine/LICENSE-ncspot.txt','LARPlayer/engine/ncspot.exe',
+        'LARPlayer/settings/larplayer-library.toml','LARPlayer/settings/larplayer-queue.toml','LARPlayer/settings/larplayer-search.toml',
+        'LARPlayer/src/deck-hotkeys.hpp','LARPlayer/src/deck-wire.hpp','LARPlayer/src/deck.hpp',
+        'LARPlayer/src/larplayer.cpp','LARPlayer/src/soloist.hpp','LARPlayer/scripts/extract-soloist.ps1'
+    )
+    foreach ($name in $expected) {
         if (-not $zip.GetEntry($name)) { throw "Missing release entry $name" }
     }
     foreach ($entry in $zip.Entries) {
-        if ($entry.FullName -match '(?i)GrooveDial|deck-preview\.png|groove-|profile[/\\]|\.env|soloist\.exe') {
+        if ($entry.FullName -notin $expected) {
             throw "Unexpected release entry $($entry.FullName)"
+        }
+        $stream = $entry.Open()
+        try {
+            $memory = [IO.MemoryStream]::new()
+            try { $stream.CopyTo($memory); $bytes = $memory.ToArray() } finally { $memory.Dispose() }
+        } finally { $stream.Dispose() }
+        $ascii = [Text.Encoding]::ASCII.GetString($bytes)
+        if ($ascii -match '-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----' -or
+            $ascii -match '(?i)(?:SOLOIST_API_KEY|SPOTIFY_CLIENT_SECRET|SPOTIFY_PASSWORD)\s*[:=]\s*[A-Za-z0-9_-]{12,}') {
+            throw "Potential credential content in $($entry.FullName)"
         }
     }
 } finally {
     $zip.Dispose()
 }
-Write-Output 'PASS CLI startup, portable ZIP and classic engine'
-
+Write-Output "PASS CLI startup, exact portable ZIP manifest and classic engine"
+Write-Output "ZIP SHA-256 $((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant())"

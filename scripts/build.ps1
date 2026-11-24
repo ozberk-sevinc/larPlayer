@@ -33,12 +33,25 @@ try {
     Pop-Location
 }
 
-Copy-Item -LiteralPath (Join-Path $project 'src'),(Join-Path $project 'settings'),(Join-Path $project 'engine') -Destination $release -Recurse -Force
-Copy-Item -LiteralPath (Join-Path $project 'README.md'),(Join-Path $project 'LICENSE') -Destination $release -Force
+foreach ($folder in 'src','settings','engine','scripts') {
+    New-Item -ItemType Directory -Path (Join-Path $release $folder) -Force | Out-Null
+}
+foreach ($name in 'deck-hotkeys.hpp','deck-wire.hpp','deck.hpp','larplayer.cpp','soloist.hpp') {
+    Copy-Item -LiteralPath (Join-Path $project "src\$name") -Destination (Join-Path $release 'src')
+}
+foreach ($name in 'larplayer-library.toml','larplayer-queue.toml','larplayer-search.toml') {
+    Copy-Item -LiteralPath (Join-Path $project "settings\$name") -Destination (Join-Path $release 'settings')
+}
+Copy-Item -LiteralPath (Join-Path $project 'engine\LICENSE-ncspot.txt') -Destination (Join-Path $release 'engine')
+Copy-Item -LiteralPath (Join-Path $project 'scripts\extract-soloist.ps1') -Destination (Join-Path $release 'scripts')
+& (Join-Path $project 'scripts\fetch-ncspot.ps1') -Destination (Join-Path $release 'engine\ncspot.exe')
+Copy-Item -LiteralPath (Join-Path $project 'README.md'),(Join-Path $project 'LICENSE') -Destination $release
 Copy-Item -LiteralPath (Join-Path $project 'docs\preview.svg') -Destination (Join-Path $release 'deck-preview.svg') -Force
 
 $archive = Join-Path $dist 'LARPlayer-Windows-x64.zip'
 Compress-Archive -LiteralPath $release -DestinationPath $archive -Force
 Write-Output "Built $executable"
 Write-Output "Packaged $archive"
-
+$digest = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText("$archive.sha256", "$digest  LARPlayer-Windows-x64.zip`n", [Text.UTF8Encoding]::new($false))
+Write-Output "SHA-256 $digest"

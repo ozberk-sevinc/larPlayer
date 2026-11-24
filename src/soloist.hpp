@@ -16,7 +16,12 @@
 #include <atomic>
 #include <chrono>
 #include <winhttp.h>
+#include <wintrust.h>
+#include <softpub.h>
+#include <wincrypt.h>
 #pragma comment(lib,"winhttp.lib")
+#pragma comment(lib,"wintrust.lib")
+#pragma comment(lib,"crypt32.lib")
 #pragma comment(lib,"advapi32.lib")
 #pragma comment(lib,"windowsapp.lib")
 #pragma comment(lib,"ole32.lib")
@@ -84,6 +89,31 @@ fs::path installed() {
     return locate(root()/L"current");
 }
 
+// Spotify does not publish a stable digest for its expiring Windows builds.
+// Require a valid Windows code-signing chain AND the expected publisher.
+bool spotify_signed(const fs::path& exe) {
+    WINTRUST_FILE_INFO file{}; file.cbStruct=sizeof(file); file.pcwszFilePath=exe.c_str();
+    WINTRUST_DATA trust{}; trust.cbStruct=sizeof(trust); trust.dwUIChoice=WTD_UI_NONE;
+    trust.fdwRevocationChecks=WTD_REVOKE_WHOLECHAIN; trust.dwUnionChoice=WTD_CHOICE_FILE;
+    trust.pFile=&file; trust.dwStateAction=WTD_STATEACTION_VERIFY;
+    GUID policy=WINTRUST_ACTION_GENERIC_VERIFY_V2;
+    LONG status=WinVerifyTrust(nullptr,&policy,&trust);
+    bool publisher=false;
+    if(status==ERROR_SUCCESS) {
+        auto provider=WTHelperProvDataFromStateData(trust.hWVTStateData);
+        auto signer=provider?WTHelperGetProvSignerFromChain(provider,0,FALSE,0):nullptr;
+        auto cert=signer?WTHelperGetProvCertFromChain(signer,0):nullptr;
+        if(cert && cert->pCert) {
+            wchar_t name[256]{};
+            if(CertGetNameStringW(cert->pCert,CERT_NAME_SIMPLE_DISPLAY_TYPE,0,nullptr,name,256))
+                publisher=wcscmp(name,L"Spotify AB")==0;
+        }
+    }
+    trust.dwStateAction=WTD_STATEACTION_CLOSE;
+    if(trust.hWVTStateData) WinVerifyTrust(nullptr,&policy,&trust);
+    return status==ERROR_SUCCESS && publisher;
+}
+
 fs::path install(bool update) {
     fs::path current=installed();
     if (!update && !current.empty()) return current;
@@ -98,10 +128,15 @@ fs::path install(bool update) {
     int code=run_engine(system/L"curl.exe",{L"--fail",L"--location",L"--proto",L"=https",L"--proto-redir",L"=https",L"--retry",L"2",L"--connect-timeout",L"15",L"--max-time",L"240",L"-o",bundle.wstring(),downloadURL});
     if (code) throw std::runtime_error("Spotify's download failed. Retry setup, or extract the official Windows archive to engine/soloist next to LARPlayer.exe.");
     fs::create_directory(unpack);
-    if (run_engine(system/L"tar.exe",{L"-xf",bundle.wstring(),L"-C",unpack.wstring()}))
-        throw std::runtime_error("Spotify's archive could not be extracted.");
+    const fs::path extractor=install_dir()/L"scripts"/L"extract-soloist.ps1";
+    if (!fs::is_regular_file(extractor) ||
+        run_engine(system/L"WindowsPowerShell"/L"v1.0"/L"powershell.exe",
+            {L"-NoProfile",L"-NonInteractive",L"-File",extractor.wstring(),L"-Archive",bundle.wstring(),L"-Destination",unpack.wstring()}))
+        throw std::runtime_error("Spotify's archive did not pass safe extraction checks.");
     fs::path exe=locate(unpack);
-    if (exe.empty() || run_engine(exe,{L"--version"})) throw std::runtime_error("The downloaded Spotify executable failed its version check.");
+    if (exe.empty() || !spotify_signed(exe))
+        throw std::runtime_error("Spotify's download has no valid Spotify AB code signature. Setup stopped before executing it.");
+    if (run_engine(exe,{L"--version"})) throw std::runtime_error("The downloaded Spotify executable failed its version check.");
     const fs::path dest=root()/L"current", backup=stage/L"old";
     if (fs::exists(dest)) fs::rename(dest,backup);
     try { fs::rename(unpack,dest); }
@@ -111,8 +146,10 @@ fs::path install(bool update) {
 
 fs::path engine(bool update=false) {
     fs::path local=locate(install_dir()/L"engine"/L"soloist");
-    if (!update && installed().empty() && !local.empty()) return local;
-    return install(update);
+    fs::path receiverExe=(!update && installed().empty() && !local.empty())?local:install(update);
+    if (!spotify_signed(receiverExe))
+        throw std::runtime_error("Soloist must have a valid Spotify AB code signature. Download the current Windows build from Spotify.");
+    return receiverExe;
 }
 
 void diagnose() {
@@ -132,18 +169,49 @@ struct Receiver {
     Receiver()=default;
     Receiver(const Receiver&)=delete;
     Receiver& operator=(const Receiver&)=delete;
+    static void store_key(const fs::path& exe,wstring& key,const fs::path& data) {
+        SECURITY_ATTRIBUTES attributes{sizeof(SECURITY_ATTRIBUTES),nullptr,TRUE};
+        HANDLE input=nullptr, writer=nullptr;
+        if(!CreatePipe(&input,&writer,&attributes,0)) throw std::runtime_error("Could not create the private key pipe.");
+        SetHandleInformation(writer,HANDLE_FLAG_INHERIT,0);
+        HANDLE nul=CreateFileW(L"NUL",GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,&attributes,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+        if(nul==INVALID_HANDLE_VALUE) { CloseHandle(input); CloseHandle(writer); throw std::runtime_error("Could not open private setup output."); }
+        wstring cmd=L"\""+exe.wstring()+L"\" setup-api-key --data-dir \""+data.wstring()+L"\"";
+        STARTUPINFOW si{}; si.cb=sizeof(si); si.dwFlags=STARTF_USESTDHANDLES;
+        si.hStdInput=input; si.hStdOutput=nul; si.hStdError=nul;
+        PROCESS_INFORMATION pi{};
+        BOOL ok=CreateProcessW(exe.c_str(),cmd.data(),nullptr,nullptr,TRUE,CREATE_NO_WINDOW,nullptr,exe.parent_path().c_str(),&si,&pi);
+        CloseHandle(input); CloseHandle(nul);
+        SecureZeroMemory(cmd.data(),cmd.size()*sizeof(wchar_t));
+        if(!ok) { CloseHandle(writer); throw std::runtime_error("Could not start Soloist's private key setup."); }
+        int length=WideCharToMultiByte(CP_UTF8,0,key.data(),static_cast<int>(key.size()),nullptr,0,nullptr,nullptr);
+        std::string bytes(length+1,'\n');
+        if(length) WideCharToMultiByte(CP_UTF8,0,key.data(),static_cast<int>(key.size()),bytes.data(),length,nullptr,nullptr);
+        DWORD written=0;
+        BOOL sent=WriteFile(writer,bytes.data(),static_cast<DWORD>(bytes.size()),&written,nullptr);
+        SecureZeroMemory(bytes.data(),bytes.size());
+        CloseHandle(writer); CloseHandle(pi.hThread);
+        DWORD wait=WaitForSingleObject(pi.hProcess,15000), code=1;
+        if(wait==WAIT_TIMEOUT) TerminateProcess(pi.hProcess,1);
+        if(wait==WAIT_OBJECT_0) GetExitCodeProcess(pi.hProcess,&code);
+        CloseHandle(pi.hProcess);
+        if(!sent || written!=static_cast<DWORD>(length+1) || wait!=WAIT_OBJECT_0 || code!=0)
+            throw std::runtime_error("Soloist could not store the key through stdin. Update to a Spotify-signed build that supports setup-api-key. The key was not passed on the command line.");
+    }
     void start(const fs::path& exe,wstring& key,const fs::path& data,const fs::path& cache) {
+        try { store_key(exe,key,data); }
+        catch (...) { SecureZeroMemory(key.data(),key.size()*sizeof(wchar_t)); throw; }
+        SecureZeroMemory(key.data(),key.size()*sizeof(wchar_t));
         job=CreateJobObjectW(nullptr,nullptr);
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
         limits.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
         if (!job || !SetInformationJobObject(job,JobObjectExtendedLimitInformation,&limits,sizeof(limits)))
             throw std::runtime_error("Could not create the receiver process group.");
-        wstring cmd=L"\""+exe.wstring()+L"\" -n \"LARPlayer\" -k \""+key+L"\" --ws 127.0.0.1:0 -D \""+
+        wstring cmd=L"\""+exe.wstring()+L"\" -n \"LARPlayer\" --ws 127.0.0.1:0 -D \""+
             data.wstring()+L"\" -C \""+cache.wstring()+L"\" --cache-size 100";
         STARTUPINFOW si{}; si.cb=sizeof(si); PROCESS_INFORMATION pi{};
         BOOL ok=CreateProcessW(exe.c_str(),cmd.data(),nullptr,nullptr,FALSE,CREATE_SUSPENDED|CREATE_NO_WINDOW,nullptr,exe.parent_path().c_str(),&si,&pi);
         SecureZeroMemory(cmd.data(),cmd.size()*sizeof(wchar_t));
-        SecureZeroMemory(key.data(),key.size()*sizeof(wchar_t));
         if (!ok) throw std::runtime_error("Windows could not launch Spotify Soloist.");
         process=pi.hProcess; pid=pi.dwProcessId;
         if (!AssignProcessToJobObject(job,process) || ResumeThread(pi.hThread)==static_cast<DWORD>(-1)) {
