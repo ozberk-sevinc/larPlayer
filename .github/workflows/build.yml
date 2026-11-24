@@ -21,6 +21,9 @@ jobs:
         run: |
           if (git status --porcelain) { throw 'Build must start from a clean checkout.' }
           ./scripts/security.ps1
+      - name: Verify current Spotify archive
+        shell: pwsh
+        run: ./scripts/verify-soloist-download.ps1
       - name: Build portable player
         shell: pwsh
         run: ./scripts/build.ps1
