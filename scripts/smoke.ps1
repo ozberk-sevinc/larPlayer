@@ -18,7 +18,13 @@ try {
     foreach ($name in 'LARPlayer/LARPlayer.exe','LARPlayer/src/deck.hpp','LARPlayer/engine/LICENSE-ncspot.txt','LARPlayer/LICENSE') {
         if (-not $zip.GetEntry($name)) { throw "Missing release entry $name" }
     }
+    foreach ($entry in $zip.Entries) {
+        if ($entry.FullName -match '(?i)GrooveDial|deck-preview\.png|groove-|profile[/\\]|\.env|soloist\.exe') {
+            throw "Unexpected release entry $($entry.FullName)"
+        }
+    }
 } finally {
     $zip.Dispose()
 }
 Write-Output 'PASS CLI startup, portable ZIP and classic engine'
+

@@ -15,6 +15,12 @@ $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvars64.bat'
 $source = Join-Path $project 'src\larplayer.cpp'
 $object = Join-Path $dist 'larplayer.obj'
 $executable = Join-Path $release 'LARPlayer.exe'
+if ([IO.Path]::GetFullPath($release) -ne [IO.Path]::GetFullPath((Join-Path $project 'dist\LARPlayer'))) {
+    throw 'Unexpected release directory.'
+}
+if (Test-Path -LiteralPath $release) {
+    Remove-Item -LiteralPath $release -Recurse -Force
+}
 New-Item -ItemType Directory -Path $release -Force | Out-Null
 
 $command = 'call "' + $vcvars + '" >nul && cl /nologo /std:c++20 /EHsc /W4 /WX /O2 /MT /utf-8 /Fo:"' +
@@ -35,3 +41,4 @@ $archive = Join-Path $dist 'LARPlayer-Windows-x64.zip'
 Compress-Archive -LiteralPath $release -DestinationPath $archive -Force
 Write-Output "Built $executable"
 Write-Output "Packaged $archive"
+
