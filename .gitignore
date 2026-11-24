@@ -1,0 +1,16 @@
+/dist/
+/build/
+/GrooveDial.exe
+/engine/soloist/
+/profile/
+/soloist/
+*.obj
+*.pdb
+*.ilk
+*.log
+*.db
+.env
+.env.*
+hotkeys.txt
+last-track.txt
+soundcheck.txt

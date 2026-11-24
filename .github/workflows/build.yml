@@ -1,0 +1,26 @@
+name: Build Windows player
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build portable player
+        shell: pwsh
+        run: ./scripts/build.ps1
+      - name: Check the release
+        shell: pwsh
+        run: ./scripts/smoke.ps1
+      - uses: actions/upload-artifact@v7
+        with:
+          name: GrooveDial-Windows-x64
+          path: dist/GrooveDial-Windows-x64.zip
+          if-no-files-found: error

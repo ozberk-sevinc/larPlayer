@@ -1,0 +1,37 @@
+initial_screen = "search"
+bitrate = 160
+audio_cache_size = 64
+use_nerdfont = false
+notify = false
+hide_display_names = true
+statusbar_format = "GROOVE DIAL  /  %title  ·  %artists"
+
+[track_format]
+left = "%title"
+center = "%artists"
+right = "%duration"
+
+[keybindings]
+q = "quit"
+Space = "playpause"
+e = "queue"
+
+[theme]
+background = "#111613"
+primary = "#F3EBCC"
+secondary = "#9AA99C"
+title = "#FFC179"
+playing = "#C6EF76"
+playing_bg = "#111613"
+playing_selected = "#111613"
+highlight = "#111613"
+highlight_bg = "#C6EF76"
+statusbar = "#F3EBCC"
+statusbar_bg = "#26352D"
+statusbar_progress = "#C6EF76"
+statusbar_progress_bg = "#26352D"
+cmdline = "#F3EBCC"
+cmdline_bg = "#26352D"
+search_match = "#FFC179"
+error = "#F3EBCC"
+error_bg = "#722F3A"
