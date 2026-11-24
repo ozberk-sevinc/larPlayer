@@ -194,6 +194,59 @@ std::vector<wstring> render(State& s,const std::vector<Item>& lib,int cols,int r
     int brandRoom=std::max(1,w-static_cast<int>(badge.size()+gap.size()+memory.size())-1);
     c.line(L" "+label(fit(brand,brandRoom,true),lime)+L" "+label(badge,moss)+gap+label(memory,copper));
     hr();
+    if(s.help){
+        auto heading=[&](const wchar_t* title){
+            c.line(L"  "+label(title,lime));
+        };
+        auto entry=[&](const wchar_t* shortcut,const wchar_t* action){
+            int keyWidth=w>=48?19:13;
+            c.line(L"  "+label(fit(shortcut,keyWidth,true),copper)+
+                label(fit(action,std::max(1,w-keyWidth-2)),paper));
+        };
+        c.line();
+        c.line(L"  "+label(L"PLAYER GUIDE",lime));
+        if(rows<17){
+            entry(L"1–4",L"Library / Find / Queue / Lists");
+            entry(L"/",L"Search");
+            entry(L"↑ ↓ Enter",L"Select / play");
+            entry(L"Space N P",L"Pause / next / previous");
+            entry(L"F1 F2 F3",L"Global playback keys");
+            while(static_cast<int>(c.lines.size())<rows-2)c.line();
+            hr();
+            c.line(L" "+label(fit(L"? / Esc close    H hotkeys    X quit",w),moss));
+            return c.lines;
+        }
+        if(rows>=25){
+            c.line(L"  "+label(fit(L"Browse music and control playback",w-2),moss));
+            c.line();
+        }
+        heading(L"BROWSE");
+        entry(L"1 / 2 / 3 / 4",L"Library / Find / Queue / Playlists");
+        entry(L"/ or Ctrl+F",L"Search the current list");
+        if(rows>=21)entry(L"↑ ↓ PgUp PgDn",L"Move through results");
+        entry(L"Enter",L"Play a track or pasted Spotify link");
+        if(rows>=23)c.line();
+        heading(L"PLAYBACK");
+        entry(L"Space",L"Pause or resume");
+        entry(L"N / P",L"Next / previous track");
+        entry(L"− / +",L"Adjust volume");
+        if(rows>=21)entry(L"V",L"Check audio signal");
+        if(rows>=25)c.line();
+        heading(L"GLOBAL SHORTCUTS");
+        entry(L"F1 / F2 / F3",L"Play/pause / previous / next");
+        entry(L"H",L"Assign your own shortcuts");
+        if(rows>=27)c.line();
+        if(rows>=21){
+            entry(L"? or Esc",L"Close guide");
+            entry(L"X",L"Quit Groove Dial");
+        }
+        // Keep the closing hint visible even on a short terminal.
+        if(static_cast<int>(c.lines.size())>rows-2)c.lines.resize(std::max(2,rows-2));
+        while(static_cast<int>(c.lines.size())<rows-2)c.line();
+        hr();
+        c.line(L" "+label(fit(L"? / Esc close guide    H customize keys    X quit",w),moss));
+        return c.lines;
+    }
     const bool playing=s.status==L"playing";
     wstring status=playing?L"▶  PLAYING":s.status==L"paused"?L"Ⅱ  PAUSED":s.status==L"buffering"?L"◌  BUFFERING":L"○  READY";
     auto title=s.track.title.empty()?(s.logged?L"Choose a track":L"Connect your Spotify"):s.track.title;
@@ -228,9 +281,6 @@ std::vector<wstring> render(State& s,const std::vector<Item>& lib,int cols,int r
         c.line();
         c.line(L" "+label(fit(s.hotkeyCapture<0?L"Choose 1–3, then press F1–F11 with optional Ctrl / Alt / Shift.":L"Press an F1–F11 key for this action. Esc cancels.",w),copper));
         c.line(L" "+label(fit(L"4  Reset defaults     H or Esc  Back to music",w),moss));
-    } else if(s.help){
-        c.line(L" "+label(L"Player keys",lime));
-        for(auto text:{L"1 Library  2 Find  3 Queue  4 Playlists",L"/ or Ctrl+F  Search the current list",L"↑ ↓ / PgUp PgDn   Move selection",L"Enter   Play selection or pasted Spotify link",L"Space   Pause / resume     N / P   Next / previous",L"− / +   Volume             V   Audio check",L"Esc   Finish search         X   Quit player",L"?   Close help"}) c.line(L" "+label(fit(text,w),paper));
     } else {
         wstring tabs;
         if(w>=55){
@@ -467,7 +517,12 @@ int run(const wstring& startView,const std::vector<Item>& lib,Receiver* receiver
                 }
                 continue;
             }
-            if(s.help){if(vk==VK_ESCAPE||ch==L'?')s.help=false;continue;}
+            if(s.help){
+                if(vk==VK_ESCAPE||ch==L'?')s.help=false;
+                else if(ch==L'h'||ch==L'H'){s.help=false;s.hotkeySettings=true;}
+                else if(ch==L'x'||ch==L'X'||ch==L'q')return 0;
+                continue;
+            }
             int slot=hotkeys.local(vk,key.dwControlKeyState);
             if(slot>=0){trigger(slot);continue;}
             int total=count(s,lib),page=std::max(1,static_cast<int>(terminal.previous.size())-(rows>=24&&cols>=57?17:10));
@@ -517,3 +572,4 @@ int run(const wstring& startView,const std::vector<Item>& lib,Receiver* receiver
     }
 }
 } // namespace deck
+
