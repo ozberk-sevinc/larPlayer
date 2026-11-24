@@ -73,11 +73,11 @@ wstring frame(int active, int columns, bool color, bool compact) {
     auto rule = [&] { line(paint(wstring(width,L'─'),muted)); };
     if (width>=55 && !compact) {
         const auto art=record();
-        const wchar_t* legend[]={L"",L"S T E R E O",L"",L"G R O O V E   D I A L",L"Spotify terminal player",L"",L"●  33⅓ RPM",L"",L""};
+        const wchar_t* legend[]={L"",L"S T E R E O",L"",L"L A R P L A Y E R",L"Spotify terminal player",L"",L"●  33⅓ RPM",L"",L""};
         for (int i=0;i<9;++i)
             line(L"  "+paint(art[i],i==4?amber:mint)+L"     "+paint(legend[i],i==3?white:(i==6?amber:muted)));
     } else {
-        line(paint(wstring(L"GROOVE DIAL").substr(0,width),mint));
+        line(paint(wstring(L"LARPLAYER").substr(0,width),mint));
     }
     rule();
     for (int i=0;i<menu_count;++i) {
@@ -96,7 +96,7 @@ int menu(bool preview) {
     DWORD previous=0, inputMode=0;
     bool console=GetConsoleMode(out,&previous);
     if (!preview && (!console || !GetConsoleMode(in,&inputMode))) {
-        throw std::runtime_error("Open GrooveDial.exe in a Windows terminal, or run GrooveDial.exe preview.");
+        throw std::runtime_error("Open LARPlayer.exe in a Windows terminal, or run LARPlayer.exe preview.");
     }
     bool vt=console && SetConsoleMode(out,previous|ENABLE_VIRTUAL_TERMINAL_PROCESSING);
     bool color=vt && !std::getenv("NO_COLOR");
@@ -132,16 +132,20 @@ int menu(bool preview) {
 fs::path install_dir() {
     std::vector<wchar_t> buf(32768);
     DWORD length=GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
-    if (!length || length==buf.size()) throw std::runtime_error("Could not locate GrooveDial.exe.");
+    if (!length || length==buf.size()) throw std::runtime_error("Could not locate LARPlayer.exe.");
     return fs::path(wstring(buf.data(),length)).parent_path();
 }
 
 fs::path user_profile() {
-    const wchar_t* overridePath=_wgetenv(L"GROOVE_PROFILE");
+    const wchar_t* overridePath=_wgetenv(L"LARPLAYER_PROFILE");
+    if (!overridePath || !*overridePath) overridePath=_wgetenv(L"GROOVE_PROFILE");
     if (overridePath && *overridePath) return fs::absolute(overridePath);
     const wchar_t* local=_wgetenv(L"LOCALAPPDATA");
     if (!local || !*local) throw std::runtime_error("Windows local app data is unavailable.");
-    return fs::path(local)/L"GrooveDial"/L"profile";
+    auto current=fs::path(local)/L"LARPlayer"/L"profile";
+    auto legacy=fs::path(local)/L"GrooveDial"/L"profile";
+    // Existing installations keep their cache and playback session after the rename.
+    return fs::exists(current) || !fs::exists(legacy) ? current : legacy;
 }
 
 int run_engine(const fs::path& engine, const std::vector<wstring>& args) {
@@ -175,7 +179,7 @@ int run_engine(const fs::path& engine, const std::vector<wstring>& args) {
 
 int memory() {
     struct Group { const wchar_t* image; const wchar_t* label; int matched=0, read=0; double mib=0; };
-    Group groups[]={{L"GrooveDial.exe",L"Groove Dial launcher"},{L"soloist.exe",L"Spotify Soloist"},{L"ncspot.exe",L"Classic engine"},{L"Spotify.exe",L"Spotify Desktop"}};
+    Group groups[]={{L"LARPlayer.exe",L"LARPlayer launcher"},{L"soloist.exe",L"Spotify Soloist"},{L"ncspot.exe",L"Classic engine"},{L"Spotify.exe",L"Spotify Desktop"}};
     HANDLE snap=CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0);
     if (snap==INVALID_HANDLE_VALUE) throw std::runtime_error("Windows could not list processes.");
     PROCESSENTRY32W entry{}; entry.dwSize=sizeof(entry);
@@ -194,7 +198,7 @@ int memory() {
         }
     } while (Process32NextW(snap,&entry));
     CloseHandle(snap);
-    output(L"\r\n  GROOVE DIAL   /   MEMORY\r\n\r\n");
+    output(L"\r\n  LARPLAYER   /   MEMORY\r\n\r\n");
     for (const auto& g:groups) {
         wchar_t row[180];
         if (g.matched) swprintf(row,180,L"  %-22ls %7.1f MiB   (%d/%d processes measured)\r\n",g.label,g.mib,g.read,g.matched);
@@ -208,16 +212,16 @@ int memory() {
 int wmain(int argc,wchar_t** argv) {
     try {
         wstring action=argc>1?argv[1]:L"";
-        if (argc>2) throw std::runtime_error("Expected one command. Run GrooveDial.exe help.");
+        if (argc>2) throw std::runtime_error("Expected one command. Run LARPlayer.exe help.");
         if (action==L"help" || action==L"--help" || action==L"-h") {
-            output(L"GrooveDial.exe  [library | playlists | search | queue | demo | commands | menu | classic | setup | key | update | preview | ram | doctor]\r\n");
+            output(L"LARPlayer.exe  [library | playlists | search | queue | demo | commands | menu | classic | setup | key | update | preview | ram | doctor]\r\n");
             return 0;
         }
         if (action==L"ram") return memory();
         if (action==L"preview") { menu(true); return 0; }
         bool fromMenu=action.empty() || action==L"menu";
         if (action.empty()) {
-            if (!_isatty(_fileno(stdin)) || !_isatty(_fileno(stdout))) throw std::runtime_error("Open GrooveDial.exe in a Windows terminal.");
+            if (!_isatty(_fileno(stdin)) || !_isatty(_fileno(stdout))) throw std::runtime_error("Open LARPlayer.exe in a Windows terminal.");
             action=L"library";
         } else if (action==L"menu") {
             int view=menu(false); if (view<0) return 0; action=view==3?L"classic":views[view];
@@ -231,7 +235,7 @@ int wmain(int argc,wchar_t** argv) {
             try { return solo::run(action); }
             catch (...) {
                 if (fromMenu && _isatty(_fileno(stdin))) {
-                    try { throw; } catch (const std::exception& e) { std::fprintf(stderr,"Groove Dial: %s\n",e.what()); }
+                    try { throw; } catch (const std::exception& e) { std::fprintf(stderr,"LARPlayer: %s\n",e.what()); }
                     output(L"Press any key to return to Windows.\r\n"); _getwch(); return 1;
                 }
                 throw;
@@ -239,11 +243,11 @@ int wmain(int argc,wchar_t** argv) {
         }
         bool doctor=action==L"doctor";
         if (!doctor && action!=L"classic")
-            throw std::runtime_error("Unknown command. Run GrooveDial.exe help.");
+            throw std::runtime_error("Unknown command. Run LARPlayer.exe help.");
         const fs::path root=install_dir(), engine=root/L"engine"/L"ncspot.exe", profile=user_profile();
         fs::create_directories(profile/L".config");
         for (auto view:views) {
-            wstring name=L"groove-"+wstring(view)+L".toml";
+            wstring name=L"larplayer-"+wstring(view)+L".toml";
             fs::copy_file(root/L"settings"/name,profile/L".config"/name,fs::copy_options::skip_existing);
         }
         if (doctor) {
@@ -251,14 +255,14 @@ int wmain(int argc,wchar_t** argv) {
             int rc=run_engine(engine,{L"--version"});
             return rc ? rc : run_engine(engine,{L"-b",profile.wstring(),L"info"});
         }
-        int rc=run_engine(engine,{L"-b",profile.wstring(),L"-c",L"groove-library.toml"});
+        int rc=run_engine(engine,{L"-b",profile.wstring(),L"-c",L"larplayer-library.toml"});
         if (rc && argc==1 && _isatty(_fileno(stdin))) {
             output(L"\r\nThe playback engine exited with an error. Press any key to close.\r\n");
             _getwch();
         }
         return rc;
     } catch (const std::exception& error) {
-        std::fprintf(stderr,"Groove Dial: %s\n",error.what());
+        std::fprintf(stderr,"LARPlayer: %s\n",error.what());
         return 1;
     }
 }

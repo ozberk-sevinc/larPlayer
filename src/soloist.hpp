@@ -26,7 +26,8 @@ using Microsoft::WRL::ComPtr;
 constexpr auto keyPage=L"https://developer.spotify.com/dashboard/soloist";
 constexpr auto downloadPage=L"https://developer.spotify.com/documentation/soloist/reference/downloads-and-updates";
 constexpr auto downloadURL=L"https://soloist-builds.spotifycdn.com/soloist_release_windows_x86_64.zip";
-constexpr auto credName=L"GrooveDial/SpotifySoloist";
+constexpr auto credName=L"LARPlayer/SpotifySoloist";
+constexpr auto legacyCredName=L"GrooveDial/SpotifySoloist";
 
 wstring read_line(const wchar_t* prompt) {
     output(prompt);
@@ -41,10 +42,13 @@ wstring read_line(const wchar_t* prompt) {
 
 wstring private_key(bool replace) {
     PCREDENTIALW stored=nullptr;
-    if (!replace && CredReadW(credName,CRED_TYPE_GENERIC,0,&stored)) {
-        wstring result(reinterpret_cast<wchar_t*>(stored->CredentialBlob),stored->CredentialBlobSize/sizeof(wchar_t));
-        CredFree(stored);
-        return result;
+    if (!replace) {
+        for (const auto* target:{credName,legacyCredName}) {
+            if (!CredReadW(target,CRED_TYPE_GENERIC,0,&stored)) continue;
+            wstring result(reinterpret_cast<wchar_t*>(stored->CredentialBlob),stored->CredentialBlobSize/sizeof(wchar_t));
+            CredFree(stored);
+            return result;
+        }
     }
     output(L"\r\nGenerate your own Spotify Soloist key at\r\n"+wstring(keyPage)+L"\r\n");
     HANDLE in=GetStdHandle(STD_INPUT_HANDLE);
@@ -74,7 +78,8 @@ fs::path locate(const fs::path& folder) {
 }
 fs::path installed() {
     wchar_t overridePath[32768];
-    DWORD n=GetEnvironmentVariableW(L"GROOVE_SOLOIST_EXE",overridePath,32768);
+    DWORD n=GetEnvironmentVariableW(L"LARPLAYER_SOLOIST_EXE",overridePath,32768);
+    if (!n) n=GetEnvironmentVariableW(L"GROOVE_SOLOIST_EXE",overridePath,32768);
     if (n && n<32768 && fs::is_regular_file(overridePath)) return fs::absolute(overridePath);
     return locate(root()/L"current");
 }
@@ -91,7 +96,7 @@ fs::path install(bool update) {
     wchar_t systemDir[MAX_PATH]; if (!GetSystemDirectoryW(systemDir,MAX_PATH)) throw std::runtime_error("Windows system folder unavailable.");
     auto system=fs::path(systemDir);
     int code=run_engine(system/L"curl.exe",{L"--fail",L"--location",L"--proto",L"=https",L"--proto-redir",L"=https",L"--retry",L"2",L"--connect-timeout",L"15",L"--max-time",L"240",L"-o",bundle.wstring(),downloadURL});
-    if (code) throw std::runtime_error("Spotify's download failed. Retry setup, or extract the official Windows archive to engine/soloist next to GrooveDial.exe.");
+    if (code) throw std::runtime_error("Spotify's download failed. Retry setup, or extract the official Windows archive to engine/soloist next to LARPlayer.exe.");
     fs::create_directory(unpack);
     if (run_engine(system/L"tar.exe",{L"-xf",bundle.wstring(),L"-C",unpack.wstring()}))
         throw std::runtime_error("Spotify's archive could not be extracted.");
@@ -133,7 +138,7 @@ struct Receiver {
         limits.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
         if (!job || !SetInformationJobObject(job,JobObjectExtendedLimitInformation,&limits,sizeof(limits)))
             throw std::runtime_error("Could not create the receiver process group.");
-        wstring cmd=L"\""+exe.wstring()+L"\" -n \"Groove Dial\" -k \""+key+L"\" --ws 127.0.0.1:0 -D \""+
+        wstring cmd=L"\""+exe.wstring()+L"\" -n \"LARPlayer\" -k \""+key+L"\" --ws 127.0.0.1:0 -D \""+
             data.wstring()+L"\" -C \""+cache.wstring()+L"\" --cache-size 100";
         STARTUPINFOW si{}; si.cb=sizeof(si); PROCESS_INFORMATION pi{};
         BOOL ok=CreateProcessW(exe.c_str(),cmd.data(),nullptr,nullptr,FALSE,CREATE_SUSPENDED|CREATE_NO_WINDOW,nullptr,exe.parent_path().c_str(),&si,&pi);
@@ -149,8 +154,8 @@ struct Receiver {
     void check() const {
         if (WaitForSingleObject(process,0)!=WAIT_OBJECT_0) return;
         DWORD exit=1; GetExitCodeProcess(process,&exit);
-        if (exit==10) throw std::runtime_error("This Soloist build expired. Run GrooveDial.exe update.");
-        throw std::runtime_error("Spotify Soloist exited (code "+std::to_string(exit)+"). Close other Groove Dial sessions. Use GrooveDial.exe key to replace an invalid key.");
+        if (exit==10) throw std::runtime_error("This Soloist build expired. Run LARPlayer.exe update.");
+        throw std::runtime_error("Spotify Soloist exited (code "+std::to_string(exit)+"). Close other LARPlayer sessions. Use LARPlayer.exe key to replace an invalid key.");
     }
 };
 
@@ -256,7 +261,7 @@ inline int run(const wstring& action) {
     winrt::init_apartment(winrt::apartment_type::multi_threaded);
     const auto catalog=library(user_profile()/L".cache");
     if(action!=L"commands") return deck::run(action,catalog,&receiver,data);
-    output(L"\r\n  GROOVE DIAL  /  SPOTIFY SOLOIST\r\n\r\n  On your phone, open Spotify's device picker and select Groove Dial.\r\n  Start a song there, or paste its Spotify link below after pairing.\r\n");
+    output(L"\r\n  LARPLAYER  /  SPOTIFY SOLOIST\r\n\r\n  On your phone, open Spotify's device picker and select LARPlayer.\r\n  Start a song there, or paste its Spotify link below after pairing.\r\n");
     auto ctl=[&](std::vector<wstring> args) {
         std::vector<wstring> cmd={L"ctl",L"--data-dir",data.wstring()};
         cmd.insert(cmd.end(),args.begin(),args.end()); return run_engine(exe,cmd);
@@ -274,7 +279,7 @@ inline int run(const wstring& action) {
     output(L"\r\n  Enter a Spotify link, search words, or a numbered result.\r\n  Commands: play / pause / next / prev / now / queue / status / check / quit\r\n");
     for(;;) {
         receiver.check();
-        wstring line=read_line(L"\r\n  groove > ");
+        wstring line=read_line(L"\r\n  larplayer > ");
         if(line==L"quit" || line==L"q") return 0;
         if(line==L"ui") return deck::run(L"library",catalog,&receiver,data);
         if(line.empty()) continue;

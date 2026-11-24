@@ -49,7 +49,7 @@ public:
         disconnect(); ended=false;
         unsigned port=0; std::ifstream(data/L"ws.port")>>port;
         if(!port || port>65535) return false;
-        session.h=WinHttpOpen(L"GrooveDial",WINHTTP_ACCESS_TYPE_NO_PROXY,nullptr,nullptr,0);
+        session.h=WinHttpOpen(L"LARPlayer",WINHTTP_ACCESS_TYPE_NO_PROXY,nullptr,nullptr,0);
         if(!session.h) return false;
         WinHttpSetTimeouts(session.h,800,800,1200,2000);
         connection.h=WinHttpConnect(session.h,L"127.0.0.1",static_cast<INTERNET_PORT>(port),0);

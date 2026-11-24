@@ -21,6 +21,6 @@ jobs:
         run: ./scripts/smoke.ps1
       - uses: actions/upload-artifact@v7
         with:
-          name: GrooveDial-Windows-x64
-          path: dist/GrooveDial-Windows-x64.zip
+          name: LARPlayer-Windows-x64
+          path: dist/LARPlayer-Windows-x64.zip
           if-no-files-found: error
