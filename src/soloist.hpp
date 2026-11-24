@@ -131,7 +131,7 @@ fs::path install(bool update) {
     const fs::path extractor=install_dir()/L"scripts"/L"extract-soloist.ps1";
     if (!fs::is_regular_file(extractor) ||
         run_engine(system/L"WindowsPowerShell"/L"v1.0"/L"powershell.exe",
-            {L"-NoProfile",L"-NonInteractive",L"-File",extractor.wstring(),L"-Archive",bundle.wstring(),L"-Destination",unpack.wstring()}))
+            {L"-NoProfile",L"-NonInteractive",L"-ExecutionPolicy",L"Bypass",L"-File",extractor.wstring(),L"-Archive",bundle.wstring(),L"-Destination",unpack.wstring()}))
         throw std::runtime_error("Spotify's archive did not pass safe extraction checks.");
     fs::path exe=locate(unpack);
     if (exe.empty() || !spotify_signed(exe))

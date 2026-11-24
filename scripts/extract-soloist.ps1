@@ -4,6 +4,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 $target = [IO.Path]::GetFullPath($Destination)
 if (-not [IO.Directory]::Exists($target)) { throw 'The extraction folder is missing.' }
 $zip = [IO.Compression.ZipFile]::OpenRead([IO.Path]::GetFullPath($Archive))

@@ -22,9 +22,9 @@ try {
                 try { $stream.WriteByte(65) } finally { $stream.Dispose() }
             }
         } finally { $zip.Dispose() }
-        $failed = $false
-        try { & (Join-Path $project 'scripts\extract-soloist.ps1') -Archive $zipPath -Destination $outPath 2>$null }
-        catch { $failed = $true }
+        $legacy = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        & $legacy -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $project 'scripts\extract-soloist.ps1') -Archive $zipPath -Destination $outPath *> $null
+        $failed = $LASTEXITCODE -ne 0
         if ($failed -eq $ShouldPass) { throw "Unexpected archive validation result: $Name" }
         if ($ShouldPass -and -not (Test-Path (Join-Path $outPath 'soloist.exe'))) {
             throw 'The safe archive was not extracted.'

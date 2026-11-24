@@ -7,7 +7,9 @@ try {
     $unpack = Join-Path $stage 'unpacked'
     New-Item -ItemType Directory -Path $unpack | Out-Null
     Invoke-WebRequest -Uri $url -OutFile $archive -MaximumRedirection 5
-    & (Join-Path $PSScriptRoot 'extract-soloist.ps1') -Archive $archive -Destination $unpack
+    $legacy = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    & $legacy -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'extract-soloist.ps1') -Archive $archive -Destination $unpack
+    if ($LASTEXITCODE -ne 0) { throw 'The current Spotify ZIP failed extraction under Windows PowerShell 5.1.' }
     $exe = @(Get-ChildItem -LiteralPath $unpack -Filter soloist.exe -File -Recurse)
     if ($exe.Count -ne 1) { throw 'Unexpected Spotify executable count.' }
     $signature = Get-AuthenticodeSignature -LiteralPath $exe[0].FullName
