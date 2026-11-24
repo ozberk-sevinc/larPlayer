@@ -2,6 +2,7 @@
 
 ![LARPlayer terminal player with a playlist view and RAM meter](docs/preview.svg)
 
+## The more you larp, the less you larp...
 A native Windows terminal player with a spinning record, live track information, saved-library search, playlists, configurable global hotkeys and a RAM meter. Spotify Soloist handles the audio. Spotify Desktop can stay closed.
 
 Windows 10/11 x64, a terminal with VT support, and a personal Spotify Premium account are required for playback. The application is written in C++20 and builds with Visual Studio's x64 C++ tools and Windows SDK.
