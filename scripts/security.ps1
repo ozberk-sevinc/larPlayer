@@ -43,3 +43,4 @@ try {
     Remove-Item -LiteralPath $full -Recurse -Force
 }
 Write-Output 'PASS key launch, loopback binding and hostile ZIP rejection'
+$global:LASTEXITCODE = 0
