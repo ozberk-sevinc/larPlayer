@@ -1,10 +1,10 @@
-initial_screen = "queue"
+initial_screen = "library"
 bitrate = 160
 audio_cache_size = 64
 use_nerdfont = false
 notify = false
 hide_display_names = true
-statusbar_format = "GROOVE DIAL  /  %title  ·  %artists"
+statusbar_format = "LARPLAYER  /  %title  ·  %artists"
 
 [track_format]
 left = "%title"

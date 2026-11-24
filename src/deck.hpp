@@ -190,7 +190,7 @@ std::vector<wstring> render(State& s,const std::vector<Item>& lib,int cols,int r
     wstring memory=s.ramMiB<0?L"RAM --":w>=40?L"RAM "+std::to_wstring(s.ramMiB)+L" MiB":
         std::to_wstring(s.ramMiB)+L"M";
     wstring gap=w>=40?L"   ":L" ";
-    wstring brand=w>=38?L"◉   G R O O V E   D I A L":L"◉  GROOVE DIAL";
+    wstring brand=w>=38?L"◉   L A R P L A Y E R":L"◉  LARPLAYER";
     int brandRoom=std::max(1,w-static_cast<int>(badge.size()+gap.size()+memory.size())-1);
     c.line(L" "+label(fit(brand,brandRoom,true),lime)+L" "+label(badge,moss)+gap+label(memory,copper));
     hr();
@@ -238,7 +238,7 @@ std::vector<wstring> render(State& s,const std::vector<Item>& lib,int cols,int r
         if(rows>=27)c.line();
         if(rows>=21){
             entry(L"? or Esc",L"Close guide");
-            entry(L"X",L"Quit Groove Dial");
+            entry(L"X",L"Quit LARPlayer");
         }
         // Keep the closing hint visible even on a short terminal.
         if(static_cast<int>(c.lines.size())>rows-2)c.lines.resize(std::max(2,rows-2));
@@ -250,7 +250,7 @@ std::vector<wstring> render(State& s,const std::vector<Item>& lib,int cols,int r
     const bool playing=s.status==L"playing";
     wstring status=playing?L"▶  PLAYING":s.status==L"paused"?L"Ⅱ  PAUSED":s.status==L"buffering"?L"◌  BUFFERING":L"○  READY";
     auto title=s.track.title.empty()?(s.logged?L"Choose a track":L"Connect your Spotify"):s.track.title;
-    wstring artist=s.track.artist.empty()?(s.logged?L"":L"Select Groove Dial in Spotify’s device picker."):s.track.artist;
+    wstring artist=s.track.artist.empty()?(s.logged?L"":L"Select LARPlayer in Spotify’s device picker."):s.track.artist;
     auto elapsed=s.elapsed(); wstring times=clock_text(elapsed)+L" / "+(s.track.duration?clock_text(s.track.duration):L"–:––");
     auto progress=[&](int n) {
         int used=s.track.duration?static_cast<int>(std::clamp(elapsed/double(s.track.duration),0.,1.)*n):0;
@@ -336,7 +336,7 @@ struct Terminal {
     std::vector<wstring> previous;
     Terminal(){
         if(!GetConsoleMode(in,&inMode)||!GetConsoleMode(out,&outMode))
-            throw std::runtime_error("Open GrooveDial.exe in a Windows terminal.");
+            throw std::runtime_error("Open LARPlayer.exe in a Windows terminal.");
         if(!SetConsoleMode(out,outMode|ENABLE_VIRTUAL_TERMINAL_PROCESSING))
             throw std::runtime_error("The deck needs Windows Terminal or a console with VT support.");
         DWORD mode=(inMode|ENABLE_WINDOW_INPUT|ENABLE_EXTENDED_FLAGS)&~(ENABLE_LINE_INPUT|ENABLE_ECHO_INPUT|ENABLE_PROCESSED_INPUT|ENABLE_QUICK_EDIT_MODE|ENABLE_VIRTUAL_TERMINAL_INPUT);
@@ -409,12 +409,12 @@ int run(const wstring& startView,const std::vector<Item>& lib,Receiver* receiver
             }else if(verb==L"play"||verb==L"pause"){
                 s.position=static_cast<double>(s.elapsed());s.anchor=wall_ms();s.speed=verb==L"play"?1:0;s.status=verb==L"play"?L"playing":L"paused";
             }else if(verb==L"set_volume")s.volume=vol;
-        }else if(!s.logged)s.message(L"Waiting for Spotify pairing. Select Groove Dial in the device picker.");
+        }else if(!s.logged)s.message(L"Waiting for Spotify pairing. Select LARPlayer in the device picker.");
         else {
             if(verb==L"play" && !s.active){
                 pendingPlay=uri;
                 if(!wire.send(L"activate"))s.message(L"Reconnecting to Soloist…");
-                else s.message(L"Activating Groove Dial for playback…");
+                else s.message(L"Activating LARPlayer for playback…");
                 return;
             }
             if(!wire.send(verb,uri,vol<0?nullptr:L"volume",vol))s.message(L"Reconnecting to Soloist…");
@@ -572,4 +572,3 @@ int run(const wstring& startView,const std::vector<Item>& lib,Receiver* receiver
     }
 }
 } // namespace deck
-
