@@ -1,4 +1,4 @@
-# LARPlayer
+# LARPlayer (Lightweight Adaptive Retro Player)
 
 ![LARPlayer terminal player with a playlist view and RAM meter](docs/preview.svg)
 
